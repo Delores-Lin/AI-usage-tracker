@@ -88,6 +88,10 @@ export function createSyncRouter(options: SyncRouterOptions): express.Router {
       response.status(401).json({ error: 'Missing or wrong sync secret. SYNC_SECRET must match on both machines.' });
       return;
     }
+    if (process.env.SYNC_PRIVACY === 'usage-only' && request.body?.privacy !== 'usage-only-v1') {
+      response.status(403).json({ error: 'A privacy-enabled collector is required.' });
+      return;
+    }
     next();
   });
 

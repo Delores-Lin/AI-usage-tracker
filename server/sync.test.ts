@@ -509,3 +509,40 @@ test('attribution stays provisional until every active device has synced past it
   });
   assert.equal(withNewDevice.settledThrough, null, 'a device that has not finished its first scan holds everything open');
 });
+
+test('usage-only sync omits conversations and refuses old collectors', async () => {
+  const prior = process.env.SYNC_PRIVACY;
+  process.env.SYNC_PRIVACY = 'usage-only';
+  const root = tempDir('sync-private');
+  const central = await startCentral(path.join(root, 'server'));
+  const collector = collectorStore(path.join(root, 'laptop'), 'codex');
+  const target = { url: central.url as string | null };
+  const sent: string[] = [];
+  const fetcher: typeof fetch = async (input, init) => {
+    sent.push(String(init?.body ?? ''));
+    return routedFetch(target)(input, init);
+  };
+  const sync = client([{ provider: 'codex', store: collector, enabled: true, scannedThrough: () => baseTime(0) }], target, { fetch: fetcher });
+  try {
+    const home = path.join(root, 'codex-home');
+    const file = writeCodexRollout(home, 'rollout-private-name.jsonl', 'thread-secret', baseTime(1), 2);
+    await indexSessionFile(collector, codexSessionSource(home), file);
+    assert.equal(await sync.flush(), true);
+    const wire = sent.join('\n');
+    for (const secret of ['Work on thread-secret', '/home/daniel/project', 'rollout-private-name.jsonl', 'thread-secret']) {
+      assert.equal(wire.includes(secret), false, `wire includes private data: ${secret}`);
+    }
+    assert.equal(central.stores.codex.getTokenTotals().totalTokens, 2200);
+    const [thread] = central.stores.codex.getThreadSummaries();
+    assert.equal(thread.prompts.length, 0);
+    assert.equal(thread.projectPath, null);
+    const old = await fetch(`${central.url}/api/sync/heartbeat`, {
+      method: 'POST', headers: { authorization: `Bearer ${SECRET}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ deviceId: 'old' })
+    });
+    assert.equal(old.status, 403);
+  } finally {
+    sync.stop(); collector.close(); await central.close(); removeDir(root);
+    if (prior === undefined) delete process.env.SYNC_PRIVACY; else process.env.SYNC_PRIVACY = prior;
+  }
+});

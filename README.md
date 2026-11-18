@@ -90,6 +90,22 @@ DEMO_MODE=true
 
 Restart the app. Demo mode uses generated data for both providers and does not start Codex App Server, call Anthropic, or read local session logs.
 
+## Privacy-focused device usage
+
+This fork shows only device-level usage on its dashboard. Set
+`SYNC_PRIVACY=usage-only` on the central server and every collector. A collector
+then omits prompt and thread-metadata records from uploads, strips titles,
+paths, and source labels, and replaces session identifiers with hashes. The
+central server rejects collectors that do not signal the privacy mode. It
+keeps token counts, model names, timestamps, and hashed identifiers for quota
+attribution and deduplication. Per-device quota shares are estimates.
+
+The collector still scans local Codex logs, and its local database may retain
+prompt text; privacy mode prevents that text from being sent to the server.
+This does not delete local Codex logs or records collected before privacy mode
+was enabled. The dashboard and its API are unauthenticated: restrict access to
+trusted devices and use an encrypted network.
+
 ## Multiple devices
 
 Codex and Claude Code limits are per account, not per machine. If you work on a server and a laptop, both draw from the same 5-hour and 7-day windows, and a tracker on one machine alone reports the other machine's usage as "unattributed". Multi-device mode fixes that.

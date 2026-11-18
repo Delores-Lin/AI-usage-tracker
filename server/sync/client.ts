@@ -1,5 +1,6 @@
 import type { UsageStore } from '../db.js';
 import type { ProviderId, TrackerRole } from '../types.js';
+import { usageOnlyRecord } from './privacy.js';
 import {
   SYNC_PROTOCOL_VERSION,
   type CollectorStatusReport,
@@ -167,7 +168,8 @@ export function createSyncClient(options: SyncClientOptions) {
       protocol: SYNC_PROTOCOL_VERSION,
       deviceId: options.deviceId,
       deviceLabel: options.deviceLabel,
-      installId: options.installId
+      installId: options.installId,
+      ...(process.env.SYNC_PRIVACY === 'usage-only' ? { privacy: 'usage-only-v1' } : {})
     };
   }
 
@@ -200,7 +202,12 @@ export function createSyncClient(options: SyncClientOptions) {
     while (!stopped) {
       const records = source.store.readOutbox(options.batchSize);
       if (records.length === 0) break;
-      const request: UploadRequest = { ...identity(), provider: source.provider, records };
+      const safe = process.env.SYNC_PRIVACY === 'usage-only' ? records.map(usageOnlyRecord) : records;
+      const omitted = records.filter((_, index) => safe[index] === null).map((record) => record.seq);
+      if (omitted.length) source.store.ackOutbox(omitted);
+      const selected = safe.filter((record): record is NonNullable<typeof record> => record !== null);
+      if (!selected.length) continue;
+      const request: UploadRequest = { ...identity(), provider: source.provider, records: selected };
       const response = await post<UploadResponse>('/api/sync/upload', request);
       const done = [...response.acked, ...response.rejected.map((item) => item.seq)];
       source.store.ackOutbox(done);

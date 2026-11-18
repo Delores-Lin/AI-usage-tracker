@@ -45,6 +45,7 @@ const version = readVersion();
 const port = Number(process.env.PORT || 8893);
 const host = process.env.HOST?.trim() || undefined;
 const demoMode = process.env.DEMO_MODE === 'true';
+const usageOnly = process.env.SYNC_PRIVACY === 'usage-only';
 const isCollector = config.role === 'collector';
 const registry = config.role === 'server' ? createDeviceRegistry(config.dataDir) : null;
 
@@ -242,6 +243,7 @@ app.get('/api/providers', (_request, response) => {
 });
 
 app.get('/api/overview', (request, response) => {
+  if (usageOnly) { response.status(403).json({ error: 'Conversation-level data is disabled.' }); return; }
   if (!dashboardAvailable(response)) return;
   const provider = resolveProvider(request, response);
   if (!provider) return;
@@ -257,6 +259,7 @@ app.get('/api/windows', (request, response) => {
 });
 
 app.get('/api/windows/detail', (request, response) => {
+  if (usageOnly) { response.status(403).json({ error: 'Conversation-level data is disabled.' }); return; }
   if (!dashboardAvailable(response)) return;
   const provider = resolveProvider(request, response);
   const duration = provider ? resolveDuration(request, response) : null;
@@ -274,6 +277,22 @@ app.get('/api/windows/detail', (request, response) => {
   response.json(detail);
 });
 
+app.get('/api/device-summary', (request, response) => {
+  if (!dashboardAvailable(response)) return;
+  const provider = resolveProvider(request, response);
+  if (!provider) return;
+  const status = syncOverview(provider.id);
+  const windows = [300, 10_080].map((duration) => {
+    const current = provider.windows(duration).find((window) => window.current);
+    if (!current) return { duration, available: false, devices: [] };
+    const detail = provider.windowDetail(duration, current.resetsAt);
+    return { duration, available: true, usedPercent: current.finalPercent, resetsAt: current.resetsAt,
+      provisional: current.provisional, unattributedPercent: current.unattributedPercent,
+      devices: detail?.devices.map(({ deviceId, percent, tokens }) => ({ deviceId, percent, tokens })) ?? [] };
+  });
+  response.json({ updatedAt: Math.floor(Date.now() / 1000), devices: status.devices.map(({ deviceId, label, online, self }) => ({ deviceId, label, online, self })), windows });
+});
+
 app.get('/api/devices', (request, response) => {
   if (!dashboardAvailable(response)) return;
   const provider = resolveProvider(request, response);
@@ -286,6 +305,7 @@ app.get('/api/pricing', (_request, response) => {
 });
 
 app.post('/api/refresh', async (request, response) => {
+  if (usageOnly) { response.status(403).json({ error: 'Conversation-level data is disabled.' }); return; }
   const provider = resolveProvider(request, response);
   if (!provider) return;
   if (!demoMode) await provider.refresh();
