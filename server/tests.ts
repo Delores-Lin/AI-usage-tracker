@@ -14,3 +14,4 @@ import './incremental.test.js';
 import './windows.test.js';
 import './sync.test.js';
 import './config.test.js';
+import './localAccount.test.js';

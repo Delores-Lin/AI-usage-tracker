@@ -12,6 +12,7 @@ import { isProviderId, providerInfo, type Provider, type ProviderRuntime } from 
 import { createSyncClient } from './sync/client.js';
 import { createDeviceRegistry, deviceStatuses } from './sync/registry.js';
 import { createSyncRouter } from './sync/server.js';
+import { createLocalAccountTracker } from './localAccount.js';
 import type { ProviderId, SyncOverview } from './types.js';
 
 function numberEnv(name: string, fallback: number): number {
@@ -137,6 +138,11 @@ const syncClient = isCollector && !demoMode
       watching: () => Object.values(providers).some((provider) => provider.enabled && provider.watching())
     })
   : null;
+
+// The account-only display is local to this machine. Its history is kept
+// separately from the old, unscoped multi-device database.
+const localAccount = usageOnly && !demoMode && providers.codex.enabled
+  ? createLocalAccountTracker({ dataDir: config.dataDir, deviceId: config.deviceId }) : null;
 
 const app = express();
 
@@ -278,6 +284,7 @@ app.get('/api/windows/detail', (request, response) => {
 });
 
 app.get('/api/device-summary', (request, response) => {
+  if (usageOnly) { response.status(403).json({ error: 'Legacy account-unscoped totals are disabled.' }); return; }
   if (!dashboardAvailable(response)) return;
   const provider = resolveProvider(request, response);
   if (!provider) return;
@@ -291,6 +298,12 @@ app.get('/api/device-summary', (request, response) => {
       devices: detail?.devices.map(({ deviceId, percent, tokens }) => ({ deviceId, percent, tokens })) ?? [] };
   });
   response.json({ updatedAt: Math.floor(Date.now() / 1000), devices: status.devices.map(({ deviceId, label, online, self }) => ({ deviceId, label, online, self })), windows });
+});
+
+app.get('/api/local-account', (_request, response) => {
+  if (!localAccount) { response.status(503).json({ error: 'Local account tracking unavailable.' }); return; }
+  response.set('Cache-Control', 'no-store');
+  response.json(localAccount.view());
 });
 
 app.get('/api/devices', (request, response) => {
@@ -318,7 +331,7 @@ app.post('/api/refresh', async (request, response) => {
 });
 
 // A collector has no dashboard of its own; send browsers to the central one.
-if (isCollector && !demoMode) {
+if (isCollector && !demoMode && !usageOnly) {
   app.use((request, response, next) => {
     if (request.path.startsWith('/api/') || request.method !== 'GET') return next();
     response.redirect(302, `${config.sync.centralUrl}${request.originalUrl}`);
@@ -356,9 +369,11 @@ else app.listen(port, onListening);
 if (!demoMode) {
   for (const provider of Object.values(providers)) provider.start();
   syncClient?.start();
+  localAccount?.start();
 }
 
 function shutdown(): void {
+  localAccount?.stop();
   syncClient?.stop();
   for (const provider of Object.values(providers)) provider.stop();
   process.exit(0);

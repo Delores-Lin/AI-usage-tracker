@@ -92,7 +92,7 @@ Restart the app. Demo mode uses generated data for both providers and does not s
 
 ## Privacy-focused device usage
 
-This fork shows only device-level usage on its dashboard. Set
+This fork shows a privacy-focused usage dashboard. Set
 `SYNC_PRIVACY=usage-only` on the central server and every collector. A collector
 then omits prompt and thread-metadata records from uploads, strips titles,
 paths, and source labels, and replaces session identifiers with hashes. The
@@ -105,6 +105,29 @@ prompt text; privacy mode prevents that text from being sent to the server.
 This does not delete local Codex logs or records collected before privacy mode
 was enabled. The dashboard and its API are unauthenticated: restrict access to
 trusted devices and use an encrypted network.
+
+### Current account mode
+
+In privacy mode, the dashboard shows the account most recently confirmed on
+this device. Before and after fetching quota, it checks that the local user and
+workspace match the account attached to the quota response. If identity is
+missing or changes during the read, it hides the result. A locally keyed HMAC
+separates quota snapshots in `data/local-account-usage.sqlite`; raw account
+identifiers and credentials are not stored in this database or uploaded by this
+feature. The key is in `data/.account-identity-key`; retain it with the database.
+The old unscoped history is not migrated into accounts.
+
+The displayed quota is the provider's **account-wide** usage, including other
+devices, and is not an exact device breakdown. The device estimate uses only
+consecutive short intervals where the same account was verified and sums quota
+increases in those intervals when local events belong to sessions created by
+that account. This is an inference: switching accounts within a session, a
+switch between polls, delayed logs, and simultaneous use on other devices can
+produce incorrect attribution. Intervals without two matching observations or
+with gaps over 60 seconds are excluded; no past usage before tracking began is
+estimated. A collector in privacy mode serves its own local account dashboard on
+its configured loopback address. Other-device synchronization from older
+versions does not supply account-scoped quota to this view.
 
 ## Multiple devices
 

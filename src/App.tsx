@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import './private.css';
 
-type Device = { deviceId: string; label: string; online: boolean; self: boolean };
-type Window = { duration: number; available: boolean; usedPercent?: number; resetsAt?: number; provisional?: boolean; unattributedPercent?: number; devices: Array<{ deviceId: string; percent: number; tokens: number }> };
-type Data = { updatedAt: number; devices: Device[]; windows: Window[] };
+type Window = { duration: number; available: boolean; usedPercent?: number; resetsAt?: number; deviceEstimate?: { tokens: number; estimatedPercent: number; measuredIntervals: number } | null };
+type Data = { status: string; account: { label: string; observedAt: number } | null; windows: Window[]; deviceUsage: { available: boolean; reason: string } };
 const pct = (value: number | undefined) => value == null ? '—' : `${value.toFixed(1)}%`;
 const date = (value: number | undefined) => value ? new Date(value * 1000).toLocaleString() : '—';
 
@@ -14,36 +13,38 @@ export default function App() {
     let alive = true;
     const refresh = async () => {
       try {
-        const response = await fetch('/api/device-summary?provider=codex', { cache: 'no-store' });
+        const response = await fetch('/api/local-account', { cache: 'no-store' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const next = await response.json() as Data;
         if (alive) { setData(next); setError(''); }
-      } catch (e) { if (alive) setError(e instanceof Error ? e.message : String(e)); }
+      } catch (e) { if (alive) { setData(null); setError(e instanceof Error ? e.message : String(e)); } }
     };
     void refresh();
-    const timer = setInterval(refresh, 30000);
+    const timer = setInterval(refresh, 5000);
     return () => { alive = false; clearInterval(timer); };
   }, []);
   return <main className="private-dashboard">
-    <header><div className="eyebrow">CODEX USAGE</div><h1>设备用量</h1><p>仅显示设备额度与 Token，不显示会话内容。</p></header>
-    {error && <p className="warning">读取失败：{error}</p>}
-    {!data && !error && <p>正在读取用量…</p>}
+    <header><div className="eyebrow">CODEX USAGE</div><h1>当前账号用量</h1><p>本机账号视图 · 不显示对话内容</p></header>
+    {error && <p className="warning" role="alert">读取失败：{error}</p>}
+    {!data && !error && <p aria-live="polite">正在读取账号…</p>}
     {data && <>
+      <section className="private-account" aria-live="polite"><strong>{data.account?.label ?? '未确认账号'}</strong><span>{data.status}</span>
+        <p>账号标识只保存在本机，切换后会重新确认并分别记录。</p></section>
       <section className="private-grid">{data.windows.map((window) => <article className="private-card" key={window.duration}>
-        <span className="caption">{window.duration === 300 ? '5 小时额度' : '每周额度'}</span>
+        <span className="caption">{window.duration === 300 ? '5 小时账号额度' : '每周账号额度'}</span>
         <div className="big">{window.available ? pct(window.usedPercent) : '未报告'}</div>
-        <p>已使用 · 重置时间 {date(window.resetsAt)}</p>
-        {window.provisional && <p className="note">数据仍在同步，设备占比可能变化。</p>}
+        <p>账号整体已用 · 重置时间 {date(window.resetsAt)}</p>
       </article>)}</section>
-      <section className="private-table"><h2>各设备用量</h2><p>额度占比根据采样和 Token 估算，可能随同步更新。</p>
-        {data.windows.map((window) => <div key={window.duration} className="private-window"><h3>{window.duration === 300 ? '5 小时' : '本周'}</h3>
-          {!window.available ? <p>账号未提供此额度窗口。</p> : <table><thead><tr><th>设备</th><th>状态</th><th>估算额度</th><th>Token</th></tr></thead>
-            <tbody>{data.devices.map((device) => { const row = window.devices.find((item) => item.deviceId === device.deviceId); return <tr key={device.deviceId}>
-              <td>{device.label}{device.self ? '（本机）' : ''}</td><td>{device.online ? '在线' : '离线'}</td><td>{row ? pct(row.percent) : '—'}</td><td>{row ? new Intl.NumberFormat().format(row.tokens) : '—'}</td>
-            </tr>; })}</tbody></table>}
-          {window.available && (window.unattributedPercent ?? 0) > 0.05 && <p>未归因：{pct(window.unattributedPercent)}</p>}
-        </div>)}
-      </section><footer>更新于 {date(data.updatedAt)} · 每 30 秒刷新</footer>
+      <section className="private-table"><h2>本机额度消耗（估算）</h2>
+        <p>仅统计本版本启用后、账号连续确认的采样区间；不确定归属的记录不计入。</p>
+        <table><thead><tr><th>额度窗口</th><th>本机估算</th><th>相关 Token</th></tr></thead><tbody>
+          {data.windows.map((window) => <tr key={window.duration}><td>{window.duration === 300 ? '5 小时' : '每周'}</td>
+            <td>{window.deviceEstimate ? pct(window.deviceEstimate.estimatedPercent) : '采样不足'}</td>
+            <td>{window.deviceEstimate ? new Intl.NumberFormat().format(window.deviceEstimate.tokens) : '—'}</td></tr>)}
+        </tbody></table>
+        <p className="note">{data.deviceUsage.reason} 本机估算把相关活动期间的额度增长计入本机，并非官方逐设备账单。</p>
+        <p>上方账号总用量包含该账号在所有设备上的使用。</p>
+      </section><footer>最近确认 {date(data.account?.observedAt)} · 每 5 秒刷新显示</footer>
     </>}
   </main>;
 }

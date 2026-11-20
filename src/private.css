@@ -18,3 +18,7 @@ body { margin: 0; background: #f4f7fa; color: #172539; font-family: -apple-syste
 .private-window th { color: #708197; font-weight: 600; }
 .private-dashboard footer { margin-top: 24px; }
 .private-dashboard .warning { color: #a33; }
+.private-account { background: #fff; border: 1px solid #dce5ed; border-radius: 15px; padding: 20px 24px; margin-bottom: 18px; }
+.private-account strong { font-size: 17px; }
+.private-account span { margin-left: 12px; color: #39817b; font-size: 14px; }
+.private-table .note { color: #a66a18; }
