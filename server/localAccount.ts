@@ -199,7 +199,10 @@ export function createLocalAccountTracker(options: { dataDir: string; deviceId?:
     let device: Record<number, ReturnType<typeof estimateDeviceUsage>> = {};
     if (fresh) {
       try { device = estimates(fresh.accountKey, fresh.windows); }
-      catch { /* Account quota remains available if local logs cannot be read. */ }
+      catch (error) {
+        if (process.env.DEBUG_AI_USAGE_TRACKER === 'true') console.warn('Local device estimate unavailable:', (error as Error).message);
+        // Account quota remains available if local logs cannot be read.
+      }
     }
     return {
       status: fresh ? status : current ? '账号信息已过期，等待刷新' : status,

@@ -36,7 +36,7 @@ export default function App() {
         <p>账号整体已用 · 重置时间 {date(window.resetsAt)}</p>
       </article>)}</section>
       <section className="private-table"><h2>本机额度消耗（估算）</h2>
-        <p>仅统计本版本启用后、账号连续确认的采样区间；不确定归属的记录不计入。</p>
+        <p>仅统计本版本启用后、账号连续确认的采样区间；没有账号线索的记录不计入。</p>
         <table><thead><tr><th>额度窗口</th><th>本机估算</th><th>相关 Token</th></tr></thead><tbody>
           {data.windows.map((window) => <tr key={window.duration}><td>{window.duration === 300 ? '5 小时' : '每周'}</td>
             <td>{window.deviceEstimate ? pct(window.deviceEstimate.estimatedPercent) : '采样不足'}</td>
