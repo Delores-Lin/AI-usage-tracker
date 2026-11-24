@@ -15,3 +15,4 @@ import './windows.test.js';
 import './sync.test.js';
 import './config.test.js';
 import './localAccount.test.js';
+import './originalEstimate.test.js';

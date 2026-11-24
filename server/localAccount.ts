@@ -70,7 +70,7 @@ export function estimateDeviceUsage(accountKey: string, observations: Observatio
   return { tokens, estimatedPercent, measuredIntervals };
 }
 
-export function createLocalAccountTracker(options: { dataDir: string; deviceId?: string; client?: AccountClient; pollMs?: number; now?: () => number }) {
+export function createLocalAccountTracker(options: { dataDir: string; deviceId?: string; client?: AccountClient; pollMs?: number; now?: () => number; onVerifiedWindows?: (windows: RateLimitWindow[]) => void }) {
   fs.mkdirSync(options.dataDir, { recursive: true, mode: 0o700 });
   const secret = localSecret(options.dataDir);
   const db = new DatabaseSync(path.join(options.dataDir, 'local-account-usage.sqlite'));
@@ -136,6 +136,8 @@ export function createLocalAccountTracker(options: { dataDir: string; deviceId?:
         current = { accountKey, observedAt, windows };
         estimateCache = null;
         status = windows.length ? '已连接' : '当前账号未返回额度窗口';
+        try { options.onVerifiedWindows?.(windows); }
+        catch (error) { console.warn('Could not save quota samples for device estimates:', (error as Error).message); }
       } catch (error) {
         if (process.env.DEBUG_AI_USAGE_TRACKER === 'true') console.warn('Local account refresh failed:', (error as Error).message);
         if (!stopped) { current = null; observe.run(now(), null); status = '账号读取失败，正在重试'; }
@@ -194,10 +196,10 @@ export function createLocalAccountTracker(options: { dataDir: string; deviceId?:
     estimateCache = { accountKey, at: now(), windows: result };
     return result;
   }
-  function view() {
+  function view(includeDeviceEstimate = true) {
     const fresh = current && now() - current.observedAt <= Math.ceil(pollMs / 1000) * 3 ? current : null;
     let device: Record<number, ReturnType<typeof estimateDeviceUsage>> = {};
-    if (fresh) {
+    if (fresh && includeDeviceEstimate) {
       try { device = estimates(fresh.accountKey, fresh.windows); }
       catch (error) {
         if (process.env.DEBUG_AI_USAGE_TRACKER === 'true') console.warn('Local device estimate unavailable:', (error as Error).message);

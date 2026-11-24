@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import './private.css';
 
-type Window = { duration: number; available: boolean; usedPercent?: number; resetsAt?: number; deviceEstimate?: { tokens: number; estimatedPercent: number; measuredIntervals: number } | null };
+type Window = { duration: number; available: boolean; usedPercent?: number; resetsAt?: number; deviceEstimate?: { tokens: number; estimatedPercent: number; observedDeltaPercent: number; unattributedPercent: number; samples: number; provisional: boolean } | null };
 type Data = { status: string; account: { label: string; observedAt: number } | null; windows: Window[]; deviceUsage: { available: boolean; reason: string } };
 const pct = (value: number | undefined) => value == null ? '—' : `${value.toFixed(1)}%`;
+const points = (value: number) => `${value.toFixed(1)} 个百分点`;
 const date = (value: number | undefined) => value ? new Date(value * 1000).toLocaleString() : '—';
 
 export default function App() {
@@ -29,20 +30,22 @@ export default function App() {
     {!data && !error && <p aria-live="polite">正在读取账号…</p>}
     {data && <>
       <section className="private-account" aria-live="polite"><strong>{data.account?.label ?? '未确认账号'}</strong><span>{data.status}</span>
-        <p>账号标识只保存在本机，切换后会重新确认并分别记录。</p></section>
+        <p>账号额度会重新确认；下方原版设备估算使用未按账号隔离的历史记录。</p></section>
       <section className="private-grid">{data.windows.map((window) => <article className="private-card" key={window.duration}>
         <span className="caption">{window.duration === 300 ? '5 小时账号额度' : '每周账号额度'}</span>
         <div className="big">{window.available ? pct(window.usedPercent) : '未报告'}</div>
         <p>账号整体已用 · 重置时间 {date(window.resetsAt)}</p>
       </article>)}</section>
-      <section className="private-table"><h2>本机额度消耗（估算）</h2>
-        <p>仅统计本版本启用后、账号连续确认的采样区间；没有账号线索的记录不计入。</p>
-        <table><thead><tr><th>额度窗口</th><th>本机估算</th><th>相关 Token</th></tr></thead><tbody>
+      <section className="private-table"><h2>本机额度消耗（原版估算）</h2>
+        <p>原版按照额度变化时各设备活动的模型参考费用进行分配。</p>
+        <table><thead><tr><th>额度窗口</th><th>本机估算</th><th>未归因</th><th>相关 Token</th></tr></thead><tbody>
           {data.windows.map((window) => <tr key={window.duration}><td>{window.duration === 300 ? '5 小时' : '每周'}</td>
-            <td>{window.deviceEstimate ? pct(window.deviceEstimate.estimatedPercent) : '采样不足'}</td>
+            <td>{window.deviceEstimate ? points(window.deviceEstimate.estimatedPercent) : '采样不足'}</td>
+            <td>{window.deviceEstimate ? points(window.deviceEstimate.unattributedPercent) : '—'}</td>
             <td>{window.deviceEstimate ? new Intl.NumberFormat().format(window.deviceEstimate.tokens) : '—'}</td></tr>)}
         </tbody></table>
-        <p className="note">{data.deviceUsage.reason} 本机估算把相关活动期间的额度增长计入本机，并非官方逐设备账单。</p>
+        <p className="note">{data.deviceUsage.reason} 这不是官方逐设备账单。</p>
+        <p>原版可能将额度回落视为新的统计段；累计增幅和设备估算可能高于当前账号已用百分比。</p>
         <p>上方账号总用量包含该账号在所有设备上的使用。</p>
       </section><footer>最近确认 {date(data.account?.observedAt)} · 每 5 秒刷新显示</footer>
     </>}

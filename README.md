@@ -118,16 +118,16 @@ feature. The key is in `data/.account-identity-key`; retain it with the database
 The old unscoped history is not migrated into accounts.
 
 The displayed quota is the provider's **account-wide** usage, including other
-devices, and is not an exact device breakdown. The device estimate uses only
-consecutive short intervals where the same account was verified and sums quota
-increases in those intervals when local events belong to sessions created by
-that account. This is an inference: switching accounts within a session, a
-switch between polls, delayed logs, and simultaneous use on other devices can
-produce incorrect attribution. Intervals without two matching observations or
-with gaps over 60 seconds are excluded; no past usage before tracking began is
-estimated. A collector in privacy mode serves its own local account dashboard on
-its configured loopback address. Other-device synchronization from older
-versions does not supply account-scoped quota to this view.
+devices. Device usage uses the original upstream attribution: quota increases
+are assigned to events by their API-equivalent cost (or tokens when pricing is
+unknown), with unmatched usage shown separately. Historical quota samples and
+events in the original store are **not separated by account**, so switching
+accounts can mix them. Missing devices, delayed samples, overlapping activity,
+and unexpected quota resets can also make the estimate misleading. Cumulative
+increases can exceed the account's current percentage after a reset. This is an
+estimate, not a per-device bill. The privacy dashboard exposes only aggregate
+totals, not conversation details. A collector in privacy mode serves its own
+local account dashboard on its configured loopback address.
 
 ## Multiple devices
 

@@ -13,6 +13,7 @@ import { createSyncClient } from './sync/client.js';
 import { createDeviceRegistry, deviceStatuses } from './sync/registry.js';
 import { createSyncRouter } from './sync/server.js';
 import { createLocalAccountTracker } from './localAccount.js';
+import { originalDeviceEstimate } from './originalEstimate.js';
 import type { ProviderId, SyncOverview } from './types.js';
 
 function numberEnv(name: string, fallback: number): number {
@@ -142,7 +143,13 @@ const syncClient = isCollector && !demoMode
 // The account-only display is local to this machine. Its history is kept
 // separately from the old, unscoped multi-device database.
 const localAccount = usageOnly && !demoMode && providers.codex.enabled
-  ? createLocalAccountTracker({ dataDir: config.dataDir, deviceId: config.deviceId }) : null;
+  ? createLocalAccountTracker({
+      dataDir: config.dataDir,
+      deviceId: config.deviceId,
+      // The original attribution consumes these snapshots, including on a
+      // collector where the legacy provider does not poll account quotas.
+      onVerifiedWindows: (windows) => providers.codex.store.insertRateLimitSnapshots(windows)
+    }) : null;
 
 const app = express();
 
@@ -303,7 +310,28 @@ app.get('/api/device-summary', (request, response) => {
 app.get('/api/local-account', (_request, response) => {
   if (!localAccount) { response.status(503).json({ error: 'Local account tracking unavailable.' }); return; }
   response.set('Cache-Control', 'no-store');
-  response.json(localAccount.view());
+  const view = localAccount.view(false);
+  const windows = view.windows.map((window) => {
+    if (!view.account || !window.available || window.usedPercent === undefined || window.resetsAt === undefined) return window;
+    const current = {
+      key: window.duration === 300 ? 'five-hour' : 'seven-day',
+      label: window.duration === 300 ? '5-hour window' : '7-day window',
+      usedPercent: window.usedPercent,
+      windowDurationMins: window.duration,
+      resetsAt: window.resetsAt,
+      observedAt: view.account.observedAt
+    };
+    try {
+      return { ...window, deviceEstimate: originalDeviceEstimate(providers.codex.store, current, config.deviceId, syncOverview('codex').settledThrough) };
+    } catch (error) {
+      if (process.env.DEBUG_AI_USAGE_TRACKER === 'true') console.warn('Original device estimate unavailable:', (error as Error).message);
+      return { ...window, deviceEstimate: null };
+    }
+  });
+  response.json({ ...view, windows, deviceUsage: {
+    available: windows.some((window) => window.deviceEstimate !== null),
+    reason: '采用原版按模型参考费用分配额度的算法；历史记录未按账号隔离，同账号其他设备未同步时可能误归因。'
+  } });
 });
 
 app.get('/api/devices', (request, response) => {
