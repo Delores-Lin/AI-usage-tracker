@@ -290,6 +290,7 @@ Copy `.env.example` to `.env`. Supported values:
 | `WATCH_SESSIONS` | `true` | Index transcripts as soon as they change; the periodic scan remains as a safety net. |
 | `QUOTA_POLLING` | `true` (`false` for collectors) | Poll account quota, account details, and cloud tasks. |
 | `HOST` | all interfaces | Address to listen on, for example the Tailscale IP. |
+| `LOCALHOST_ACCESS` | `false` | Also listen on 127.0.0.1 when `HOST` names a specific non-loopback address; retry that private address if unavailable. |
 | `DATA_DIR` | `./data` | Folder for databases, device identity, and sync state. |
 | `CODEX` | `true` | Set to `false` to turn the Codex provider off. |
 | `CLAUDE_CODE` | `true` | Set to `false` to turn the Claude Code provider off. |

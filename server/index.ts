@@ -14,6 +14,7 @@ import { createDeviceRegistry, deviceStatuses } from './sync/registry.js';
 import { createSyncRouter } from './sync/server.js';
 import { createLocalAccountTracker } from './localAccount.js';
 import { originalDeviceEstimate } from './originalEstimate.js';
+import { startDashboardListeners } from './dashboardListeners.js';
 import type { ProviderId, SyncOverview } from './types.js';
 
 function numberEnv(name: string, fallback: number): number {
@@ -373,26 +374,19 @@ app.use((request, response, next) => {
   response.sendFile(path.join(clientDist, 'index.html'));
 });
 
-const where = `http://${host ?? 'localhost'}:${port}`;
-const onListening = (error?: Error) => {
-  if (error) {
-    // Express 5 hands listen errors to this callback instead of throwing. Without
-    // exiting, a tracker whose HOST address is not up yet (Tailscale still
-    // starting at boot) would keep running without serving anything, and the
-    // service manager would never restart it.
-    console.error(`AI Usage Tracker cannot listen on ${where}: ${error.message}`);
-    process.exit(1);
+const listeners = startDashboardListeners(app, {
+  port,
+  host,
+  localFallback: flagEnv(process.env, 'LOCALHOST_ACCESS', false),
+  onListening(address, boundPort) {
+    const enabled = Object.values(providers).filter((provider) => provider.enabled).map((provider) => provider.label);
+    console.log(`AI Usage Tracker ${version} (${config.role}, device "${config.deviceId}"): http://${address}:${boundPort} (${enabled.join(', ') || 'no providers enabled'})`);
+  },
+  onError(message, fatal) {
+    console.error(`AI Usage Tracker ${message}${fatal ? '' : '; local dashboard remains available and private interface will be retried.'}`);
+    if (fatal) process.exit(1);
   }
-  const enabled = Object.values(providers).filter((provider) => provider.enabled).map((provider) => provider.label);
-  console.log(
-    `AI Usage Tracker ${version} (${config.role}, device "${config.deviceId}"): ${where} (${enabled.join(', ') || 'no providers enabled'})`
-  );
-  if (isCollector) console.log(`Sending usage to ${config.sync.centralUrl}; the outbox keeps it while the server is unreachable.`);
-  if (config.role === 'server') console.log('Accepting usage from collectors at /api/sync.');
-  if (demoMode) console.log('DEMO_MODE is enabled.');
-};
-if (host) app.listen(port, host, onListening);
-else app.listen(port, onListening);
+});
 
 if (!demoMode) {
   for (const provider of Object.values(providers)) provider.start();
@@ -401,6 +395,7 @@ if (!demoMode) {
 }
 
 function shutdown(): void {
+  listeners.close();
   localAccount?.stop();
   syncClient?.stop();
   for (const provider of Object.values(providers)) provider.stop();
