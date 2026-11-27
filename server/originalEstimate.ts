@@ -7,10 +7,10 @@ export function originalDeviceEstimate(store: UsageStore, window: RateLimitWindo
   const detail = windowDetail(store, window.windowDurationMins, undefined, window.resetsAt, window, { settledThrough });
   if (!detail || detail.samples < 2) return null;
   const device = detail.devices.find((row) => row.deviceId === deviceId);
-  if (!device) return null;
   return {
-    estimatedPercent: device.percent,
-    tokens: device.tokens,
+    estimatedPercent: device?.percent ?? 0,
+    tokens: device?.tokens ?? 0,
+    devices: detail.devices.map(({ deviceId, percent, tokens }) => ({ deviceId, percent, tokens })),
     observedDeltaPercent: detail.observedDeltaPercent,
     unattributedPercent: detail.unattributedPercent,
     samples: detail.samples,

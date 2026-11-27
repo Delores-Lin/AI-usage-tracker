@@ -129,6 +129,49 @@ estimate, not a per-device bill. The privacy dashboard exposes only aggregate
 totals, not conversation details. A collector in privacy mode serves its own
 local account dashboard on its configured loopback address.
 
+### Offline Codex usage transfer
+
+If devices cannot connect to each other, keep the tracker running on each
+device so it scans that device's Codex logs. After updating both installations
+to this version and running `npm install` and `npm run build`, export on the
+other device from its tracker directory (example: Windows PowerShell):
+
+```powershell
+npm run offline -- export --out "$env:USERPROFILE\Desktop\codex-usage.json"
+```
+
+Wait for the scan to complete first. The file must not already exist; choose a
+new filename for each export. Transfer that file privately to the Mac, where
+the central tracker must be running as `TRACKER_ROLE=server`, then from its
+tracker directory run (replace the path with the transferred file):
+
+```bash
+npm run offline -- import --in "$HOME/Downloads/codex-usage.json"
+```
+
+The importer authenticates to the Mac's own loopback service with its existing
+`SYNC_SECRET` from `.env`; the file never contains that secret. Refresh the
+dashboard to see the recalculated device estimates. Repeat exports and imports
+as needed; repeated records are deduplicated. Offline imports do not imply that
+the other device is currently online. Each device needs a distinct, stable
+`DEVICE_ID`; an existing installation should keep its current ID.
+
+The file contains only the originating device's hashed event and session IDs,
+timestamps, model names, token counts, estimated API-equivalent costs, and
+supported account-wide quota snapshots, plus its device ID. It contains no
+conversation text, titles, paths, account IDs or credentials. These usage
+metadata are still sensitive: transfer the file securely. Never transfer the
+tracker database, `.env`, or the `.codex` directory for this purpose.
+
+Importing later supplies missing events to the original allocation algorithm;
+it does not provide official per-device quota charges or guarantee accuracy.
+The original database does not separate accounts, so use the same Codex
+account on the devices and avoid mixing histories from account switches.
+Unobserved devices, cloud activity, missing quota samples, price estimates and
+clock differences still affect results. The export is a snapshot, not a live
+connection; the next transfer is needed for later activity. It has a 100 MB
+size limit and does not propagate deletions from the originating device.
+
 ## Multiple devices
 
 Codex and Claude Code limits are per account, not per machine. If you work on a server and a laptop, both draw from the same 5-hour and 7-day windows, and a tracker on one machine alone reports the other machine's usage as "unattributed". Multi-device mode fixes that.

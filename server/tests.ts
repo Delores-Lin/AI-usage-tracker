@@ -17,3 +17,5 @@ import './config.test.js';
 import './localAccount.test.js';
 import './originalEstimate.test.js';
 import './dashboardListeners.test.js';
+
+import './offline.test.js';

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import './private.css';
 
-type Window = { duration: number; available: boolean; usedPercent?: number; resetsAt?: number; deviceEstimate?: { tokens: number; estimatedPercent: number; observedDeltaPercent: number; unattributedPercent: number; samples: number; provisional: boolean } | null };
-type Data = { status: string; account: { label: string; observedAt: number } | null; windows: Window[]; deviceUsage: { available: boolean; reason: string } };
+type Window = { duration: number; available: boolean; usedPercent?: number; resetsAt?: number; deviceEstimate?: { tokens: number; estimatedPercent: number; observedDeltaPercent: number; unattributedPercent: number; samples: number; provisional: boolean; devices: { deviceId: string; percent: number; tokens: number }[] } | null };
+type Data = { status: string; account: { label: string; observedAt: number } | null; windows: Window[]; deviceLabels: Record<string, string>; deviceUsage: { available: boolean; reason: string } };
 const pct = (value: number | undefined) => value == null ? '—' : `${value.toFixed(1)}%`;
 const points = (value: number) => `${value.toFixed(1)} 个百分点`;
 const date = (value: number | undefined) => value ? new Date(value * 1000).toLocaleString() : '—';
@@ -36,7 +36,7 @@ export default function App() {
         <div className="big">{window.available ? pct(window.usedPercent) : '未报告'}</div>
         <p>账号整体已用 · 重置时间 {date(window.resetsAt)}</p>
       </article>)}</section>
-      <section className="private-table"><h2>本机额度消耗（原版估算）</h2>
+      <section className="private-table"><h2>各设备额度消耗（原版估算）</h2>
         <p>原版按照额度变化时各设备活动的模型参考费用进行分配。</p>
         <table><thead><tr><th>额度窗口</th><th>本机估算</th><th>未归因</th><th>相关 Token</th></tr></thead><tbody>
           {data.windows.map((window) => <tr key={window.duration}><td>{window.duration === 300 ? '5 小时' : '每周'}</td>
@@ -44,6 +44,12 @@ export default function App() {
             <td>{window.deviceEstimate ? points(window.deviceEstimate.unattributedPercent) : '—'}</td>
             <td>{window.deviceEstimate ? new Intl.NumberFormat().format(window.deviceEstimate.tokens) : '—'}</td></tr>)}
         </tbody></table>
+        {data.windows.map((window) => window.deviceEstimate && <div className="private-window" key={window.duration}>
+          <h3>{window.duration === 300 ? '5 小时窗口' : '每周窗口'} · 设备明细</h3>
+          {window.deviceEstimate.devices.length ? <table><thead><tr><th>设备</th><th>估算额度消耗</th><th>相关 Token</th></tr></thead><tbody>
+            {window.deviceEstimate.devices.map((device) => <tr key={device.deviceId}><td>{data.deviceLabels[device.deviceId] ?? device.deviceId}</td><td>{points(device.percent)}</td><td>{new Intl.NumberFormat().format(device.tokens)}</td></tr>)}
+          </tbody></table> : <p>此窗口暂无设备活动记录。</p>}
+        </div>)}
         <p className="note">{data.deviceUsage.reason} 这不是官方逐设备账单。</p>
         <p>原版可能将额度回落视为新的统计段；累计增幅和设备估算可能高于当前账号已用百分比。</p>
         <p>上方账号总用量包含该账号在所有设备上的使用。</p>

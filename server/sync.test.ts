@@ -546,3 +546,27 @@ test('usage-only sync omits conversations and refuses old collectors', async () 
     if (prior === undefined) delete process.env.SYNC_PRIVACY; else process.env.SYNC_PRIVACY = prior;
   }
 });
+
+test('offline upload accepts only sanitized usage and leaves device offline', async () => {
+  const { usageOnlyRecord } = await import('./sync/privacy.js');
+  const directory = tempDir('offline-http');
+  const central = await startCentral(directory);
+  try {
+    const time = baseTime();
+    const record = usageOnlyRecord({ seq: 1, kind: 'event', key: 'private-event', data: {
+      eventId: 'private-event', partId: '/private/file', threadId: 'private-thread', partKind: 'main', observedAt: time,
+      model: 'test-model', inputTokens: 20, cachedInputTokens: 0, outputTokens: 1,
+      reasoningOutputTokens: 0, totalTokens: 21, cacheWriteInputTokens: 0, cacheWrite1hInputTokens: 0, estimatedApiCostUsd: 1
+    } });
+    const send = (records: unknown[]) => fetch(`${central.url}/api/sync/upload`, {
+      method: 'POST', headers: { Authorization: `Bearer ${SECRET}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ protocol: 1, privacy: 'usage-only-v1', offline: true, deviceId: 'windows', provider: 'codex', records })
+    });
+    const response = await send([record]);
+    assert.equal(response.status, 200);
+    assert.equal(central.stores.codex.getDeviceUsage().find((row) => row.deviceId === 'windows')?.tokens, 21);
+    assert.equal(central.registry.list().length, 0);
+    const rejected = await send([{ ...record, data: { ...(record!.data as object), prompt: 'secret' } }]);
+    assert.equal(rejected.status, 400);
+  } finally { await central.close(); removeDir(directory); }
+});

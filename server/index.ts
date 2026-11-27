@@ -329,7 +329,8 @@ app.get('/api/local-account', (_request, response) => {
       return { ...window, deviceEstimate: null };
     }
   });
-  response.json({ ...view, windows, deviceUsage: {
+  const deviceLabels = Object.fromEntries(syncOverview('codex').devices.map(({ deviceId, label }) => [deviceId, label]));
+  response.json({ ...view, windows, deviceLabels, deviceUsage: {
     available: windows.some((window) => window.deviceEstimate !== null),
     reason: '采用原版按模型参考费用分配额度的算法；历史记录未按账号隔离，同账号其他设备未同步时可能误归因。'
   } });

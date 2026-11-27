@@ -18,6 +18,6 @@ test('the privacy dashboard uses original cost-weighted device attribution witho
     assert.equal(result.observedDeltaPercent, 5);
     assert.equal(result.unattributedPercent, 0);
     assert.equal(JSON.stringify(result).includes('private-thread'), false);
-    assert.equal(originalDeviceEstimate(store, sample(t + 60, 35, resets), 'absent-device', null), null);
+    assert.equal(originalDeviceEstimate(store, sample(t + 60, 35, resets), 'absent-device', null)?.estimatedPercent, 0);
   } finally { store.close(); removeDir(directory); }
 });

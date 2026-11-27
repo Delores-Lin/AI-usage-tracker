@@ -12,6 +12,7 @@ import {
   type UploadResponse
 } from './protocol.js';
 import type { DeviceRegistry } from './registry.js';
+import { isOfflineRecord } from '../offline.js';
 
 const DEVICE_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/i;
 const MAX_RECORDS_PER_UPLOAD = 10_000;
@@ -112,6 +113,14 @@ export function createSyncRouter(options: SyncRouterOptions): express.Router {
       return;
     }
 
+    if (body.offline === true) {
+      const remote = request.socket.remoteAddress;
+      if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(remote ?? '') || provider !== 'codex' || !body.records.every(isOfflineRecord)) {
+        response.status(400).json({ error: 'Offline imports must be local and contain only validated usage records.' });
+        return;
+      }
+    }
+
     const serverNow = now();
     const valid: ParsedSyncRecord[] = [];
     const rejected: UploadResponse['rejected'] = [];
@@ -133,8 +142,10 @@ export function createSyncRouter(options: SyncRouterOptions): express.Router {
       response.status(500).json({ error: 'The server could not store this batch; it will be retried.' });
       return;
     }
-    options.registry.recordContact(identity, serverNow);
-    options.registry.recordUpload(identity.deviceId, acked.length, serverNow);
+    if (body.offline !== true) {
+      options.registry.recordContact(identity, serverNow);
+      options.registry.recordUpload(identity.deviceId, acked.length, serverNow);
+    }
     if (rejected.length > 0 && debugEnabled()) {
       console.warn(`Rejected ${rejected.length} records from ${identity.deviceId}: ${rejected[0].error}`);
     }
